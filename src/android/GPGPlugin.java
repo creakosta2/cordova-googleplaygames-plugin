@@ -2,6 +2,7 @@ package com.ludei.googleplaygames.cordova;
 
 import android.Manifest;
 import android.content.Intent;
+import android.util.Log;
 
 import com.ludei.googleplaygames.GPGService;
 
@@ -205,6 +206,8 @@ public class GPGPlugin extends CordovaPlugin implements GPGService.SessionCallba
     public void loadScore(CordovaArgs args, final CallbackContext ctx) throws JSONException {
 
         String leaderboardId = args.getString(0);
+
+        Log.d("df", "leaderBoard == " + leaderboardId);
 
         _service.loadScore(leaderboardId, new GPGService.LoadScoreCallback() {
             @Override
