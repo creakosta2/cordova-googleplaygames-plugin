@@ -64,6 +64,7 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
+import com.plyerplugin.android.aacom.R;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -71,6 +72,7 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -210,7 +212,7 @@ public class GPGService  {
             String strData = obj.optString("data");
             if (strData != null && strData.length() > 0) {
                 try {
-                    data.bytes = strData.getBytes("UTF-8");
+                    data.bytes = strData.getBytes(StandardCharsets.UTF_8);
                 }
                 catch (Exception ex) {
                     data.bytes = strData.getBytes();
@@ -273,6 +275,7 @@ public class GPGService  {
     private static final int RESOLUTION_REQUEST_CODE = 0x00000000001113;
     private static final int GP_ERROR_DIALOG_REQUEST_CODE = 0x00000000001114;
     private static final int GP_SAVED_GAMES_REQUEST_CODE = 0x000000000001117;
+    private static final int ACHIVEMENT_SHOW = 101;
     private static final String GP_SIGNED_IN_PREFERENCE = "gp_signedIn";
 
     private static int RC_SIGN_IN = 10;
@@ -294,6 +297,8 @@ public class GPGService  {
 
     GoogleSignInClient mGoogleSignInClient;
     GoogleSignInAccount signedInAccount;
+    private SnapshotsClient mSnapshotsClient = null;
+
     protected static final String[] defaultScopes = new String[]{Scopes.GAMES, Scopes.PLUS_LOGIN};
     protected ArrayList<String> scopes = new ArrayList<String>();
     protected CompletionCallback intentCallback;
@@ -371,83 +376,111 @@ public class GPGService  {
 
     public boolean handleActivityResult(final int requestCode, final int resultCode, final Intent intent) {
 
-        boolean managed = false;
-        if ((requestCode == RESOLUTION_REQUEST_CODE || requestCode == GP_DIALOG_REQUEST_CODE) &&
-                resultCode == GamesActivityResultCodes.RESULT_RECONNECT_REQUIRED) {
-
-            //User signed out from the achievements/leaderboards settings in the upper right corner
-            this.logout(null);
-            if (intentCallback != null) {
-                intentCallback.onComplete(new Error("User signed out",  GamesActivityResultCodes.RESULT_RECONNECT_REQUIRED));
-                intentCallback = null;
-            }
-            managed = true;
-
-        }
-        else if (requestCode == RESOLUTION_REQUEST_CODE) {
+           boolean managed = false;
 
 
-        }
-        else if (requestCode == GP_DIALOG_REQUEST_CODE) {
+        if (resultCode == RC_SIGN_IN) {
 
-            if (intentCallback != null) {
-                Error error = resultCode != Activity.RESULT_OK ? null : new Error("resultCode: " + resultCode, resultCode);
-                intentCallback.onComplete(error);
-                intentCallback = null;
-            }
-            managed = true;
-
-        }
-        else if (requestCode == GP_ERROR_DIALOG_REQUEST_CODE) {
-            if (errorDialogCallback != null) {
-                errorDialogCallback.run();
-            }
-        }
-        else if (requestCode == GP_SAVED_GAMES_REQUEST_CODE && intentSavedGameCallback != null) {
-            if (resultCode == Activity.RESULT_CANCELED) {
-                intentSavedGameCallback.onComplete(null, null);
-            }
-            else if (resultCode != Activity.RESULT_OK) {
-                intentSavedGameCallback.onComplete(null, new Error("resultCode: " + resultCode, resultCode));
-            }
-            if (intent.hasExtra(Snapshots.EXTRA_SNAPSHOT_METADATA)) {
-                // Load a snapshot.
-                SnapshotMetadata snapshotMetadata = (SnapshotMetadata)intent.getParcelableExtra(Snapshots.EXTRA_SNAPSHOT_METADATA);
-                GameSnapshot snapshot = GameSnapshot.fromMetadata(snapshotMetadata, null);
-                intentSavedGameCallback.onComplete(snapshot, null);
-            }
-            else if (intent.hasExtra(Snapshots.EXTRA_SNAPSHOT_NEW)) {
-                intentSavedGameCallback.onComplete(new GameSnapshot(), null);
-            }
-            intentSavedGameCallback = null;
-        }else if (resultCode == RC_SIGN_IN)
-        {
-            if (resultCode == Activity.RESULT_OK) {
                 if (mGoogleSignInClient == null) {
 
                     Task<GoogleSignInAccount> task =
                             GoogleSignIn.getSignedInAccountFromIntent(intent);
 
                     try {
-                        GoogleSignInAccount account = task.getResult(ApiException.class);
-                        onConnected(account);
+                         signedInAccount = task.getResult(ApiException.class);
+
+                        onConnected(signedInAccount);
+
                     } catch (ApiException apiException) {
                         String message = apiException.getMessage();
                         if (message == null || message.isEmpty()) {
                             //message = getString(R.string.signin_other_error);
                         }
                     }
-
                     this.createClient();
                 }
                 // mGoogleSignInClient.connect();
-            }
-            else {
-                String errorString = resultCode == Activity.RESULT_CANCELED ? null : GPUtils.activityResponseCodeToString(resultCode);
-                processSessionChange(null, resultCode, errorString);
-            }
-            managed = true;
+
+        }else if (resultCode == ACHIVEMENT_SHOW){
+
         }
+
+//        if ((requestCode == RESOLUTION_REQUEST_CODE || requestCode == GP_DIALOG_REQUEST_CODE) &&
+//                resultCode == GamesActivityResultCodes.RESULT_RECONNECT_REQUIRED) {
+//
+//            //User signed out from the achievements/leaderboards settings in the upper right corner
+//            this.logout(null);
+//            if (intentCallback != null) {
+//                intentCallback.onComplete(new Error("User signed out",  GamesActivityResultCodes.RESULT_RECONNECT_REQUIRED));
+//                intentCallback = null;
+//            }
+//            managed = true;
+//
+//        }
+//        else if (requestCode == RESOLUTION_REQUEST_CODE) {
+//
+//
+//        }
+//        else if (requestCode == GP_DIALOG_REQUEST_CODE) {
+//
+//            if (intentCallback != null) {
+//                Error error = resultCode != Activity.RESULT_OK ? null : new Error("resultCode: " + resultCode, resultCode);
+//                intentCallback.onComplete(error);
+//                intentCallback = null;
+//            }
+//            managed = true;
+//
+//        }
+//        else if (requestCode == GP_ERROR_DIALOG_REQUEST_CODE) {
+//            if (errorDialogCallback != null) {
+//                errorDialogCallback.run();
+//            }
+//        }
+//        else if (requestCode == GP_SAVED_GAMES_REQUEST_CODE && intentSavedGameCallback != null) {
+//            if (resultCode == Activity.RESULT_CANCELED) {
+//                intentSavedGameCallback.onComplete(null, null);
+//            }
+//            else if (resultCode != Activity.RESULT_OK) {
+//                intentSavedGameCallback.onComplete(null, new Error("resultCode: " + resultCode, resultCode));
+//            }
+//            if (intent.hasExtra(Snapshots.EXTRA_SNAPSHOT_METADATA)) {
+//                // Load a snapshot.
+//                SnapshotMetadata snapshotMetadata = (SnapshotMetadata)intent.getParcelableExtra(Snapshots.EXTRA_SNAPSHOT_METADATA);
+//                GameSnapshot snapshot = GameSnapshot.fromMetadata(snapshotMetadata, null);
+//                intentSavedGameCallback.onComplete(snapshot, null);
+//            }
+//            else if (intent.hasExtra(Snapshots.EXTRA_SNAPSHOT_NEW)) {
+//                intentSavedGameCallback.onComplete(new GameSnapshot(), null);
+//            }
+//            intentSavedGameCallback = null;
+//        }else if (resultCode == RC_SIGN_IN)
+//        {
+//            if (resultCode == Activity.RESULT_OK) {
+//                if (mGoogleSignInClient == null) {
+//
+//                    Task<GoogleSignInAccount> task =
+//                            GoogleSignIn.getSignedInAccountFromIntent(intent);
+//
+//                    try {
+//                        GoogleSignInAccount account = task.getResult(ApiException.class);
+//                        onConnected(account);
+//                    } catch (ApiException apiException) {
+//                        String message = apiException.getMessage();
+//                        if (message == null || message.isEmpty()) {
+//                            //message = getString(R.string.signin_other_error);
+//                        }
+//                    }
+//
+//                    this.createClient();
+//                }
+//                // mGoogleSignInClient.connect();
+//            }
+//            else {
+//                String errorString = resultCode == Activity.RESULT_CANCELED ? null : GPUtils.activityResponseCodeToString(resultCode);
+//                processSessionChange(null, resultCode, errorString);
+//            }
+//            managed = true;
+//        }
         return managed;
     }
 
@@ -456,9 +489,11 @@ public class GPGService  {
     private void onConnected(GoogleSignInAccount googleSignInAccount) {
         Log.d("TAG", "onConnected(): connected to Google APIs");
 
-       // mTurnBasedMultiplayerClient = Games.getTurnBasedMultiplayerClient(this.activity, googleSignInAccount);
-       // mInvitationsClient = Games.getInvitationsClient(this.activity, googleSignInAccount);
         signedInAccount = googleSignInAccount;
+
+        mEventsClient = Games.getEventsClient(this.activity, signedInAccount);
+
+        mSnapshotsClient = Games.getSnapshotsClient(this.activity,  signedInAccount);
 
         Games.getPlayersClient(this.activity, googleSignInAccount)
                 .getCurrentPlayer()
@@ -468,6 +503,8 @@ public class GPGService  {
                             public void onSuccess(Player player) {
                                // mDisplayName = player.getDisplayName();
                                // mPlayerId = player.getPlayerId();
+
+                                me = player;
 
                            Log.d("df ", " my names == " + player.getDisplayName());
                                 Log.d("df", " my id == "+ player.getPlayerId());
@@ -496,21 +533,6 @@ public class GPGService  {
                 })
                 .addOnFailureListener(createFailureListener(
                         "There was a problem getting the activation hint!"));
-
-      //  setViewVisibility();
-
-        // As a demonstration, we are registering this activity as a handler for
-        // invitation and match events.
-
-        // This is *NOT* required; if you do not register a handler for
-        // invitation events, you will get standard notifications instead.
-        // Standard notifications may be preferable behavior in many cases.
-        //mInvitationsClient.registerInvitationCallback(mInvitationCallback);
-
-        // Likewise, we are registering the optional MatchUpdateListener, which
-        // will replace notifications you would get otherwise. You do *NOT* have
-        // to register a MatchUpdateListener.
-        //mTurnBasedMultiplayerClient.registerTurnBasedMatchUpdateCallback(mMatchUpdateCallback);
     }
 
 
@@ -568,31 +590,17 @@ public class GPGService  {
             Intent signInIntent = mGoogleSignInClient.getSignInIntent();
             activity.startActivityForResult(signInIntent, RC_SIGN_IN);
 
-
         }
 
         GoogleSignInOptions signInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
                 .requestScopes(Drive.SCOPE_APPFOLDER)
                 .build();
 
-        //mGoogleSignInClient = GoogleSignIn.getClient(this, gso);
-
         mGoogleSignInClient = GoogleSignIn.getClient(activity, signInOptions);
 
+        Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+        activity.startActivityForResult(signInIntent, RC_SIGN_IN);
 
-//        GoogleApiClient.Builder builder = new GoogleApiClient.Builder(activity, this, this);
-//        builder.addApi(Games.API);
-//        builder.addScope(Games.SCOPE_GAMES);
-//        //TODO: better way to handle extra scopes
-//        if (scopes != null) {
-//            for (String str: scopes) {
-//                if (str.equalsIgnoreCase(Drive.SCOPE_APPFOLDER.toString()) || str.toLowerCase().contains("appfolder")) {
-//                    builder.addApi(Drive.API).addScope(Drive.SCOPE_APPFOLDER);
-//                }
-//            }
-//        }
-//
-//        client = builder.build();
     }
 
     private void processSessionChange(String authToken, int errorCode, String errorMessage)
@@ -1007,13 +1015,20 @@ public class GPGService  {
         try {
             intentCallback = callback;
             notifyWillStart();
-            Task<Intent> wer = Games.getAchievementsClient(this.activity, signedInAccount).getAchievementsIntent();
-           wer.addOnSuccessListener(new OnSuccessListener<Intent>() {
-               @Override
-               public void onSuccess(Intent intent) {
-                   activity.startActivityForResult(intent, GP_DIALOG_REQUEST_CODE);
-               }
-           });
+             Games.getAchievementsClient(this.activity, signedInAccount)
+                     .getAchievementsIntent()
+                     .addOnSuccessListener(new OnSuccessListener<Intent>() {
+                @Override
+                public void onSuccess(Intent intent) {
+                    activity.startActivityForResult(intent, ACHIVEMENT_SHOW);
+                }
+            });
+//           wer.addOnSuccessListener(new OnSuccessListener<Intent>() {
+//               @Override
+//               public void onSuccess(Intent intent) {
+//                   activity.startActivityForResult(intent, GP_DIALOG_REQUEST_CODE);
+//               }
+//           });
            // activity.startActivityForResult(Games.Achievements.getAchievementsIntent(client), GP_DIALOG_REQUEST_CODE);
         }
         catch (Exception ex) {
@@ -1542,8 +1557,7 @@ public class GPGService  {
             }
 
             if (callback != null) {
-                Task<Void> result = Games.getAchievementsClient(this.activity, signedInAccount).unlockImmediate(achievementID);
-                   result.addOnSuccessListener(new OnSuccessListener<Void>() {
+                Task<Void> result = Games.getAchievementsClient(this.activity, signedInAccount).unlockImmediate(achievementID).addOnSuccessListener(new OnSuccessListener<Void>() {
                        @Override
                        public void onSuccess(Void aVoid) {
 
