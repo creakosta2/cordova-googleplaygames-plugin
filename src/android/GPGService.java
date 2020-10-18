@@ -64,7 +64,7 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
-//import com.plyerplugin.android.aacom.R;
+import com.plyerplugin.android.aacom.R;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -338,12 +338,12 @@ public class GPGService  {
                 }
             }
         }
-        if (this.isAvailable()) {
+       // if (this.isAvailable()) {
             this.createClient();
             if (this.trySilentAuthentication) {
               signInSilently();
             }
-        }
+      //  }
     }
 
     public boolean isAvailable() {
@@ -583,14 +583,14 @@ public class GPGService  {
 
     private void createClient()
     {
-        if (mGoogleSignInClient != null) {
-          //  client.unregisterConnectionCallbacks(this);
-          //  client.unregisterConnectionFailedListener(this);
-
-            Intent signInIntent = mGoogleSignInClient.getSignInIntent();
-            activity.startActivityForResult(signInIntent, RC_SIGN_IN);
-
-        }
+//        if (mGoogleSignInClient != null) {
+//          //  client.unregisterConnectionCallbacks(this);
+//          //  client.unregisterConnectionFailedListener(this);
+//
+//            Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+//            activity.startActivityForResult(signInIntent, RC_SIGN_IN);
+//
+//        }
 
         GoogleSignInOptions signInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
                 .requestScopes(Drive.SCOPE_APPFOLDER)
@@ -649,6 +649,12 @@ public class GPGService  {
                            // me = Games.Players.getCurrentPlayer(client);
                            // String token = me.getPlayerId();
                            // return token;
+
+
+//                            mGoogleSignInClient = GoogleSignIn.getClient(activity, signInOptions);
+//
+//                            Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+//                            activity.startActivityForResult(signInIntent, RC_SIGN_IN);
 
 
                         } else {
