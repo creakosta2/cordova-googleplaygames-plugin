@@ -70,7 +70,7 @@ import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
-import com.plyerplugin.android.aacom.R;
+//import com.plyerplugin.android.aacom.R;
 
 import org.json.JSONException;
 import org.json.JSONObject;
