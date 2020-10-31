@@ -3,6 +3,7 @@ package com.ludei.googleplaygames;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
+import android.app.PendingIntent;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -26,6 +27,7 @@ import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GoogleApiAvailability;
 import com.google.android.gms.common.Scopes;
 import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.PendingResult;
 import com.google.android.gms.common.api.Result;
@@ -35,17 +37,21 @@ import com.google.android.gms.common.images.ImageManager;
 import com.google.android.gms.drive.Drive;
 import com.google.android.gms.games.AnnotatedData;
 import com.google.android.gms.games.EventsClient;
+import com.google.android.gms.games.FriendsResolutionRequiredException;
 import com.google.android.gms.games.Games;
 import com.google.android.gms.games.GamesActivityResultCodes;
 import com.google.android.gms.games.GamesClient;
 import com.google.android.gms.games.GamesStatusCodes;
 import com.google.android.gms.games.Player;
+import com.google.android.gms.games.PlayerBuffer;
 import com.google.android.gms.games.Players;
 import com.google.android.gms.games.SnapshotsClient;
 import com.google.android.gms.games.TurnBasedMultiplayerClient;
 import com.google.android.gms.games.achievement.Achievement;
 import com.google.android.gms.games.achievement.AchievementBuffer;
 import com.google.android.gms.games.achievement.Achievements;
+import com.google.android.gms.games.event.Event;
+import com.google.android.gms.games.event.EventBuffer;
 import com.google.android.gms.games.leaderboard.LeaderboardScore;
 import com.google.android.gms.games.leaderboard.LeaderboardVariant;
 import com.google.android.gms.games.leaderboard.Leaderboards;
@@ -72,17 +78,23 @@ import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Objects;
+import java.util.Random;
 import java.util.concurrent.Executor;
 
 import static com.google.android.gms.games.Games.getPlayerStatsClient;
 
 public class GPGService  {
 
+
+    private static final int PAGE_SIZE = 101 ;
+    private static final Object SHOW_SHARING_FRIENDS_CONSENT = 102;
 
     public class Session {
 
@@ -252,9 +264,9 @@ public class GPGService  {
     public interface LoadScoreCallback {
         void onComplete(long score, Error error);
     }
-
+ // JSONObject      GameSnapshot
     public interface SavedGameCallback {
-        void onComplete(GameSnapshot data, Error error);
+        void onComplete(JSONObject data, Error error);
     }
 
     public interface AchievementsCallback {
@@ -276,9 +288,11 @@ public class GPGService  {
     private static final int GP_ERROR_DIALOG_REQUEST_CODE = 0x00000000001114;
     private static final int GP_SAVED_GAMES_REQUEST_CODE = 0x000000000001117;
     private static final int ACHIVEMENT_SHOW = 101;
+    private static final int SHOW_LEADErBOARD = 102; // showLeaderboard
+    private static final int RC_VIDEO_OVERLAY = 9011;
     private static final String GP_SIGNED_IN_PREFERENCE = "gp_signedIn";
 
-    private static int RC_SIGN_IN = 10;
+    private static final int RC_SIGN_IN = 10;
 
     private static GPGService sharedInstance = null;
 
@@ -307,19 +321,20 @@ public class GPGService  {
     protected String authToken;
     protected SessionCallback sessionListener;
     protected WillStartActivityCallback willStartListener;
-    protected boolean trySilentAuthentication = false;
+    protected boolean trySilentAuthentication = true;
     protected Executor executor;
     protected Player me;
     protected Runnable errorDialogCallback;
     protected Runnable requestPermission = null;
     protected ImageManager imageManager = null;
     private EventsClient mEventsClient;
+    private String mCurrentSaveName = "snapshotTemp";
 
     public GPGService(Activity activity)
     {
         sharedInstance = this;
         this.activity = activity;
-        this.trySilentAuthentication = this.activity.getPreferences(Activity.MODE_PRIVATE).getBoolean(GP_SIGNED_IN_PREFERENCE, false);
+        this.trySilentAuthentication = this.activity.getPreferences(Activity.MODE_PRIVATE).getBoolean(GP_SIGNED_IN_PREFERENCE, true);
     }
 
     public void init() {
@@ -339,8 +354,10 @@ public class GPGService  {
             }
         }
        // if (this.isAvailable()) {
+         Log.d("df", "Own Logey3773737733  ");
             this.createClient();
             if (this.trySilentAuthentication) {
+                Log.d("df", " try silentium !  ");
               signInSilently();
             }
       //  }
@@ -377,32 +394,75 @@ public class GPGService  {
     public boolean handleActivityResult(final int requestCode, final int resultCode, final Intent intent) {
 
            boolean managed = false;
+            Log.d("df", "Los Handle Activity ");
 
 
-        if (resultCode == RC_SIGN_IN) {
+        if (requestCode == RC_SIGN_IN) { // was resultCode
 
-                if (mGoogleSignInClient == null) {
-
+               Log.d("df", "Los RC in handle active ");
+                if (signedInAccount == null) {  // was signedIn not account
+                    Log.d("df", "Los RC in handle active 0023002 ");
                     Task<GoogleSignInAccount> task =
                             GoogleSignIn.getSignedInAccountFromIntent(intent);
-
+                 Log.d("df", " handle Active Result aaaa  002309290 ");
                     try {
                          signedInAccount = task.getResult(ApiException.class);
-
+                        Log.d("df", "Los RC in  PRE OnConnect ");
                         onConnected(signedInAccount);
 
                     } catch (ApiException apiException) {
                         String message = apiException.getMessage();
                         if (message == null || message.isEmpty()) {
                             //message = getString(R.string.signin_other_error);
+                            Log.d("df", "error my LOSSS SIGN == " + message);
                         }
                     }
                     this.createClient();
                 }
                 // mGoogleSignInClient.connect();
 
-        }else if (resultCode == ACHIVEMENT_SHOW){
+        }else if (requestCode == ACHIVEMENT_SHOW){
 
+        }else if (requestCode == SHOW_LEADErBOARD){
+
+        } else if (requestCode == GP_SAVED_GAMES_REQUEST_CODE) {
+            if (intent != null) {
+                if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA)) {
+                    // Load a snapshot.
+                    SnapshotMetadata snapshotMetadata =
+                            intent.getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
+                    mCurrentSaveName = snapshotMetadata.getUniqueName();
+                    Log.d("df", "Snapshot name ! first " + mCurrentSaveName);
+                    // Load the game data from the Snapshot
+                    // ...
+
+                      loadingSnapshot(snapshotMetadata);
+
+
+//                    SnapshotMetadata meta = snapshot.getMetadata();
+//                    SnapshotContents contents = snapshot.getSnapshotContents();
+//                    if (meta != null && contents != null) {
+//                        GameSnapshot data = GameSnapshot.fromMetadata(meta, contents.readFully());
+//                        return data;
+//                    }
+
+                    //
+
+
+
+                } else if (intent.hasExtra(SnapshotsClient.EXTRA_SNAPSHOT_NEW)) {
+                    // Create a new snapshot named with a unique string
+                    String unique = new BigInteger(281, new Random()).toString(13);
+                    mCurrentSaveName = "snapshotTemp-" + unique;
+                    Log.d("df", "Snapshot name ! " + mCurrentSaveName);
+
+                    // Create the new snapshot
+                    // ...
+                }
+            }
+
+        } else if (requestCode == RC_VIDEO_OVERLAY) {
+            Log.d("dsf", " My request Code is null ");
         }
 
 //        if ((requestCode == RESOLUTION_REQUEST_CODE || requestCode == GP_DIALOG_REQUEST_CODE) &&
@@ -486,6 +546,99 @@ public class GPGService  {
 
 
 
+//    void   SnapshotMetadata snapshotMetadata =
+//            intent.getParcelableExtra(SnapshotsClient.EXTRA_SNAPSHOT_METADATA);
+//    mCurrentSaveName = snapshotMetadata.getUniqueName();
+//                    Log.d("df", "Snapshot name ! first " + mCurrentSaveName);
+//    // Load the game data from the Snapshot
+//    // ...
+
+
+    private void readdAllData(byte[] data) throws IOException, JSONException {
+
+         // public SaveGame(byte[] data) {
+         ///   if (data == null) return; // default progress
+            //loadFromJson(new String(data));
+         // Error
+            Error error = new Error("error to return data", 2);
+            String a = new String(data);
+            JSONObject onf = new JSONObject((a));
+            String formatlosString = onf.getString("desc");
+        Log.d("df", " my FINALLLL == " + formatlosString);
+        intentSavedGameCallback.onComplete(onf, error);
+        //}
+    }
+
+    void loadingSnapshot(SnapshotMetadata snapshotMetadata)
+    {
+
+          waitForCloseAndOpen(snapshotMetadata).addOnSuccessListener(new OnSuccessListener<SnapshotsClient.DataOrConflict<Snapshot>>() {
+              @Override
+              public void onSuccess(SnapshotsClient.DataOrConflict<Snapshot> result) {
+
+                  Snapshot snapLoading = result.getData();
+                      if(snapLoading == null ){
+                    Log.d("df", " Conflicted snapshot loading ! \n");
+                      }else{
+                          //read my snapshot
+                            Log.d("df", " ok in snap my okkkk !!  ");
+
+
+                          SnapshotContents contents = snapLoading.getSnapshotContents();
+                          if (snapshotMetadata != null && contents != null) {
+
+                          }
+                              //GameSnapshot data = GameSnapshot.fromMetadata(snapshotMetadata, contents.readFully());
+                          try {
+                              readdAllData(contents.readFully());
+                          } catch (IOException | JSONException e) {
+                              e.printStackTrace();
+                          }
+
+
+                      }
+
+              }
+          });
+
+    }
+
+
+    private Task<SnapshotsClient.DataOrConflict<Snapshot>> waitForCloseAndOpen(final SnapshotMetadata snapshotMetadata){
+
+        final boolean useMetadata = snapshotMetadata != null && snapshotMetadata.getUniqueName() != null;
+        if (useMetadata) {
+            Log.i("TAG", "Opening snapshot using metadata: " + snapshotMetadata);
+        } else {
+            Log.i("TAG", "Opening snapshot using currentSaveName: " + mCurrentSaveName);
+        }
+
+        final String filename = useMetadata ? snapshotMetadata.getUniqueName() : mCurrentSaveName;
+
+        Task<SnapshotsClient.DataOrConflict<Snapshot>> openTask = useMetadata ? mSnapshotsClient.open(snapshotMetadata).addOnCompleteListener(new OnCompleteListener<SnapshotsClient.DataOrConflict<Snapshot>>() {
+            @Override
+            public void onComplete(@NonNull Task<SnapshotsClient.DataOrConflict<Snapshot>> task) {
+            // Snapshot snap =  Objects.requireNonNull(task.getResult()).getData();
+               Log.d("df", " SNAPREADING this 0001  ");
+            }
+        }) : mSnapshotsClient.open(mCurrentSaveName, true, 1).addOnCompleteListener(new OnCompleteListener<SnapshotsClient.DataOrConflict<Snapshot>>() {
+            @Override
+            public void onComplete(@NonNull Task<SnapshotsClient.DataOrConflict<Snapshot>> task) {
+                Log.d("df", " SNAPREADING this 0002  ");
+            }
+        });
+
+            return openTask.addOnFailureListener(new OnFailureListener() {
+                @Override
+                public void onFailure(@NonNull Exception e) {
+                  Log.d("df", " onFailure to get snapshot data loading ");
+                }
+            });
+
+    }
+
+
+
     private void onConnected(GoogleSignInAccount googleSignInAccount) {
         Log.d("TAG", "onConnected(): connected to Google APIs");
 
@@ -508,6 +661,7 @@ public class GPGService  {
 
                            Log.d("df ", " my names == " + player.getDisplayName());
                                 Log.d("df", " my id == "+ player.getPlayerId());
+                               // mEventsClient.load(true);
                                 //setViewVisibility();
                             }
                         }
@@ -583,22 +737,25 @@ public class GPGService  {
 
     private void createClient()
     {
-//        if (mGoogleSignInClient != null) {
-//          //  client.unregisterConnectionCallbacks(this);
-//          //  client.unregisterConnectionFailedListener(this);
-//
-//            Intent signInIntent = mGoogleSignInClient.getSignInIntent();
-//            activity.startActivityForResult(signInIntent, RC_SIGN_IN);
-//
-//        }
+         Log.d("df", "create Client 000 1 ");
+        if (mGoogleSignInClient != null) {
+          //  client.unregisterConnectionCallbacks(this);
+          //  client.unregisterConnectionFailedListener(this);
+            Log.d("df", "create Client 000 2 ");
+            Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+            activity.startActivityForResult(signInIntent, RC_SIGN_IN);
 
+        }
+
+          Log.d("df", "Los CreateClient 555666 ");
         GoogleSignInOptions signInOptions = new GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_GAMES_SIGN_IN)
                 .requestScopes(Drive.SCOPE_APPFOLDER)
                 .build();
 
         mGoogleSignInClient = GoogleSignIn.getClient(activity, signInOptions);
-
+        Log.d("df", "Los CreateClient 8588399393 ");
         Intent signInIntent = mGoogleSignInClient.getSignInIntent();
+        Log.d("df", " create own CLIENT !");
         activity.startActivityForResult(signInIntent, RC_SIGN_IN);
 
     }
@@ -666,97 +823,6 @@ public class GPGService  {
                     }
                 });
     }
-
-
-
-//    @Override
-//    public void onConnectionFailed(com.google.android.gms.common.ConnectionResult connectionResult)
-//    {
-//
-//        int code = connectionResult.getErrorCode();
-//        if (code == ConnectionResult.SIGN_IN_REQUIRED || code == ConnectionResult.RESOLUTION_REQUIRED) {
-//            try {
-//                this.notifyWillStart();
-//                connectionResult.startResolutionForResult(activity,RESOLUTION_REQUEST_CODE);
-//            }
-//            catch (Exception ex)
-//            {
-//                processSessionChange(null, connectionResult.getErrorCode(), GPUtils.errorCodeToString(connectionResult.getErrorCode()) + " " + ex.getMessage());
-//            }
-//        }
-//        else {
-//            processSessionChange(null, connectionResult.getErrorCode(), GPUtils.errorCodeToString(connectionResult.getErrorCode()));
-//        }
-//    }
-
-//    @Override
-//    public void onConnected(android.os.Bundle bundle)
-//    {
-//        if (trySilentAuthentication == false) {
-//            trySilentAuthentication = true;
-//            activity.getPreferences(Activity.MODE_PRIVATE).edit().putBoolean(GP_SIGNED_IN_PREFERENCE, true).commit();
-//        }
-//
-//
-//        AsyncTask<Void, Void, Object> task = new AsyncTask<Void, Void, Object>() {
-//
-//            @Override
-//            protected Object doInBackground(Void... params) {
-//                try
-//                {
-//                    me = Games.Players.getCurrentPlayer(mGoogleSignInClient);
-//                    String token = me.getPlayerId();
-//                    return token;
-//                }
-//                catch (Exception ex)
-//                {
-//                    ex.printStackTrace();
-//                    return ex;
-//                }
-//            }
-//
-//            @Override
-//            protected void onPostExecute(Object info) {
-//
-//                if (info instanceof Exception) {
-//                    Exception ex = (Exception) info;
-//                    GPGService.this.processSessionChange(null, 0, ex.getLocalizedMessage());
-//                    client.disconnect();
-//                }
-//                else {
-//                    GPGService.this.processSessionChange(info.toString(), 0, null);
-//                }
-//            }
-//
-//        };
-//
-//        if (this.executor != null) {
-//            task.executeOnExecutor(executor);
-//        }
-//        else  {
-//            task.execute();
-//        }
-//
-//
-//        //check connection bundle for multiplayer invitations
-//        if (bundle != null) {
-//            Invitation inv = bundle.getParcelable(Multiplayer.EXTRA_INVITATION);
-//            if (inv != null) {
-//                multiplayerInvitation = inv;
-//            }
-//        }
-//
-//        if (onConnectedCallback != null) {
-//            onConnectedCallback.run();
-//        }
-//
-//    }
-//
-//    @Override
-//    public void onConnectionSuspended(int i)
-//    {
-//        processSessionChange(null, 0, null);
-//    }
 
 
     public boolean isLoggedIn()
@@ -891,39 +957,42 @@ public class GPGService  {
 
     public void showLeaderboard(String leaderboard, CompletionCallback callback)
     {
-        if (intentCallback != null) {
-            if (callback != null) {
-                callback.onComplete(new Error("Intent already running", 0));
-            }
-            return;
-        }
-
+//        if (intentCallback != null) {
+//            if (callback != null) {
+//                callback.onComplete(new Error("Intent already running", 0));
+//            }
+//            return;
+//        }
+         Log.d("df", "show leaderBorer in This 01  my leaderB " + leaderboard);
         try {
             intentCallback = callback;
            // notifyWillStart();
+            Log.d("df", "show leaderBorer in This 02 ");
             if (leaderboard == null || leaderboard.length() == 0) {
               //  activity.startActivityForResult(Games.Leaderboards.getAllLeaderboardsIntent(client), GP_DIALOG_REQUEST_CODE);
-
+                Log.d("df", "show leaderBorer in This 03 ");
                 assert leaderboard != null;
                 Games.getLeaderboardsClient(this.activity, signedInAccount) // GoogleSignIn.getLastSignedInAccount(this)
                         .getLeaderboardIntent(leaderboard)
                         .addOnSuccessListener(new OnSuccessListener<Intent>() {
                             @Override
                             public void onSuccess(Intent intent) {
-                               activity.startActivityForResult(intent, GP_DIALOG_REQUEST_CODE);
+                                Log.d("df", "show leaderBorer in This success 01  ");
+                               activity.startActivityForResult(intent, SHOW_LEADErBOARD);
                             }
                         });
 
 
-            }
-            else {
+            } else {
+                Log.d("df", "show leaderBorer in EMPTY ");
                 assert leaderboard != null;
                 Games.getLeaderboardsClient(this.activity, signedInAccount) // GoogleSignIn.getLastSignedInAccount(this)
                         .getLeaderboardIntent(leaderboard)
                         .addOnSuccessListener(new OnSuccessListener<Intent>() {
                             @Override
                             public void onSuccess(Intent intent) {
-                                activity.startActivityForResult(intent, GP_DIALOG_REQUEST_CODE);
+                                Log.d("df", "show leaderBorer in This success 02 ");
+                                activity.startActivityForResult(intent, SHOW_LEADErBOARD);
                             }
                         });
 
@@ -941,12 +1010,12 @@ public class GPGService  {
 
     public void loadAchievements(final AchievementsCallback callback)
     {
-        if (!isLoggedIn()) {
-            if (callback != null) {
-                callback.onComplete(null, new Error("User is not logged into Google Play Game Services", 0));
-            }
-            return;
-        }
+//        if (!isLoggedIn()) {
+//            if (callback != null) {
+//                callback.onComplete(null, new Error("User is not logged into Google Play Game Services", 0));
+//            }
+//            return;
+//        }
 
         try {
 
@@ -959,6 +1028,7 @@ public class GPGService  {
                         @Override
                         public void onSuccess(AnnotatedData<AchievementBuffer> achievementBufferAnnotatedData) {
 
+                            Log.d("df", " we are thising ");
                             AchievementBuffer buffer = achievementBufferAnnotatedData.get();
                             Iterator<Achievement> it = buffer.iterator();
 
@@ -1011,24 +1081,33 @@ public class GPGService  {
 
     public void showAchievements(CompletionCallback callback)
     {
-        if (intentCallback != null) {
-            if (callback != null) {
-                callback.onComplete(new Error("Intent already running", 0));
-            }
-            return;
-        }
+         Log.d("df"," show Achievement 01222");
+//        if (intentCallback != null) {
+//            if (callback != null) {
+//                callback.onComplete(new Error("Intent already running", 0));
+//            }
+//            return;
+//        }
 
         try {
             intentCallback = callback;
             notifyWillStart();
+            Log.d("df"," show Achievement 02323322");
+            // GoogleSignIn.getLastSignedInAccount(this)    signedInAccount
              Games.getAchievementsClient(this.activity, signedInAccount)
                      .getAchievementsIntent()
                      .addOnSuccessListener(new OnSuccessListener<Intent>() {
                 @Override
                 public void onSuccess(Intent intent) {
+                    Log.d("df"," show Achievement success ");
                     activity.startActivityForResult(intent, ACHIVEMENT_SHOW);
                 }
-            });
+            }).addOnFailureListener(new OnFailureListener() {
+                 @Override
+                 public void onFailure(@NonNull Exception e) {
+                     Log.d(" df", "Achievement FAILURE to " + e.getMessage());
+                 }
+             });
 //           wer.addOnSuccessListener(new OnSuccessListener<Intent>() {
 //               @Override
 //               public void onSuccess(Intent intent) {
@@ -1038,19 +1117,22 @@ public class GPGService  {
            // activity.startActivityForResult(Games.Achievements.getAchievementsIntent(client), GP_DIALOG_REQUEST_CODE);
         }
         catch (Exception ex) {
+             Log.d("df", "Achievement exception !!!" + ex.getMessage()); // !!!GoogleSignInAccount must not be null
             if (callback != null) {
+
                 callback.onComplete(new Error(ex.toString(), 0));
             }
         }
     }
 
     public void showSavedGames(SavedGameCallback callback) {
-        if (intentCallback != null) {
-            if (callback != null) {
-                callback.onComplete(null, new Error("Intent already running", 0));
-            }
-            return;
-        }
+        Log.d("df", "in SHHOOOOWW this ");
+//        if (intentCallback != null) {
+//            if (callback != null) {
+//                callback.onComplete(null, new Error("Intent already running", 0));
+//            }
+//            return;
+//        }
 
         intentSavedGameCallback = callback;
         notifyWillStart();
@@ -1109,7 +1191,7 @@ public class GPGService  {
                                 callback.onComplete(null, new Error("Empty snapshot", 0));
                             }
                             else if (info instanceof GameSnapshot) {
-                                callback.onComplete((GameSnapshot) info, null);
+                              //  callback.onComplete((GameSnapshot) info, null);
                             }
                             else {
                                 callback.onComplete(null, (Error)info);
@@ -1316,111 +1398,91 @@ public class GPGService  {
     }
 
 
-    public void  writeSavedGame(final GameSnapshot snapshotData, final CompletionCallback callback) {
-        final String snapshotName = snapshotData.identifier;
-        final boolean createIfMissing = true;
+    // was    public void  writeSavedGame(final GameSnapshot snapshotData, final CompletionCallback callback)
+    public void  writeSavedGame(final JSONObject snapshotData, final String NameSnapshot, final CompletionCallback callback) {
+       // final String snapshotName = snapshotData.identifier;
+       // final boolean createIfMissing = true;
 
         final Error potentialError = new Error("", 0);
 
+          Log.d("df", " snap loading this " + NameSnapshot);
 
-        Snapshot snapshot = (Snapshot) getSnap(snapshotData.identifier);
-        snapshot.getSnapshotContents().writeBytes(snapshotData.bytes);
-        // Set the data payload for the snapshot
-       // snapshot.getSnapshotContents().writeBytes(snapshotData.bytes);
-        // Create the change operation
-        SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
-                //  .setCoverImage(coverImage)
-                .setDescription(snapshotData.description != null ? snapshotData.description : "")
-                .build();
 
-        SnapshotsClient snapshotsClient = Games.getSnapshotsClient(this.activity, Objects.requireNonNull(GoogleSignIn.getLastSignedInAccount(this.activity)));
+        mSnapshotsClient.open(NameSnapshot, true).addOnSuccessListener(new OnSuccessListener<SnapshotsClient.DataOrConflict<Snapshot>>() {
+                     @Override
+                     public void onSuccess(SnapshotsClient.DataOrConflict<Snapshot> snapshotDataOrConflict) {
+                         if(snapshotDataOrConflict.isConflict())
+                        {
+                          Log.d("as", "Snap is Conflict !! ");
+                             }else{
+                        Log.d("df", " SNAP is  NOTTT CONFLICT ");
+                             Snapshot mySnapA = snapshotDataOrConflict.getData();
 
-        snapshotsClient.commitAndClose(snapshot, metadataChange).addOnSuccessListener(new OnSuccessListener<SnapshotMetadata>() {
-            @Override
-            public void onSuccess(SnapshotMetadata snapshotMetadata) {
+                             assert mySnapA != null;
+                             Log.d("df", " My datas in writing first ! ");
+                             // exists snapshotData.toString().getBytes("utf-8");
+                             mySnapA.getSnapshotContents().writeBytes(snapshotData.toString().getBytes());
+                            // mySnapA.getSnapshotContents().writeBytes(snapshotData.bytes)
 
-                // callback
-                callback.onComplete(null);
-            }
-        }).addOnFailureListener(new OnFailureListener() {
+                             Log.d("df", " My datas in writing seconds ! ");
+                             Date date = new Date();
+                             //This method returns the time in millis
+                             long timeMilli = date.getTime();
+                           SnapshotMetadataChange metaLos = new SnapshotMetadataChange.Builder()
+                                 //.setCoverImage()
+                                   .setDescription(" first my snap loading los ")
+                                .setPlayedTimeMillis(timeMilli)
+                              .build();
+
+//                              assert mySnapA != null;
+                         mSnapshotsClient.commitAndClose(mySnapA, metaLos);
+                             }
+                       }
+
+
+               }
+        ).addOnFailureListener(new OnFailureListener() {
             @Override
             public void onFailure(@NonNull Exception e) {
-                potentialError.message = "Could not open Snapshot for update.";
-                callback.onComplete(potentialError);
+                Log.d(" df", " failure snapshot this !!! "  + e.getMessage());
             }
         });
-        // Commit the operation
-       // return snapshotsClient.commitAndClose(snapshot, metadataChange);
-
-       // Snapshot snapshot = open.getSnapshot();
 
 
 
 
 
-//        AsyncTask<Void, Void, Boolean> updateTask = new AsyncTask<Void, Void, Boolean>() {
+
+
+
+//        Snapshot snapshot = (Snapshot) getSnap(snapshotData.identifier);
+//        snapshot.getSnapshotContents().writeBytes(snapshotData.bytes);
+//        // Set the data payload for the snapshot
+//       // snapshot.getSnapshotContents().writeBytes(snapshotData.bytes);
+//        // Create the change operation
+//        SnapshotMetadataChange metadataChange = new SnapshotMetadataChange.Builder()
+//                //  .setCoverImage(coverImage)
+//                .setDescription(snapshotData.description != null ? snapshotData.description : "")
+//                .build();
+//
+//        SnapshotsClient snapshotsClient = Games.getSnapshotsClient(this.activity, signedInAccount);
+//
+//        snapshotsClient.commitAndClose(snapshot, metadataChange).addOnSuccessListener(new OnSuccessListener<SnapshotMetadata>() {
 //            @Override
-//            protected void onPreExecute() {
-//            }
+//            public void onSuccess(SnapshotMetadata snapshotMetadata) {
 //
+//                // callback
+//                Log.d("df", "ok my SNAPSHOT writing !! ");
+//                callback.onComplete(null);
+//            }
+//        }).addOnFailureListener(new OnFailureListener() {
 //            @Override
-//            protected Boolean doInBackground(Void... params) {
-//                try {
-//                    Snapshots.OpenSnapshotResult open = Games.Snapshots.open(client, snapshotName, createIfMissing).await();
-//
-//                    if (!open.getStatus().isSuccess()) {
-//                        potentialError.message = "Could not open Snapshot for update.";
-//                        return false;
-//                    }
-//
-//                    // Change data but leave existing metadata
-//                    Snapshot snapshot = open.getSnapshot();
-//                    snapshot.getSnapshotContents().writeBytes(snapshotData.bytes);
-//
-//                    SnapshotMetadataChange metadataChange = null;
-//                    if (!GPUtils.isEmpty(snapshotData.description)) {
-//                        metadataChange = new SnapshotMetadataChange.Builder()
-//                                .setDescription(snapshotData.description != null ? snapshotData.description : "")
-//                                .build();
-//                    }
-//                    else {
-//                        metadataChange = SnapshotMetadataChange.EMPTY_CHANGE;
-//                    }
-//
-//                    Snapshots.CommitSnapshotResult commit = Games.Snapshots.commitAndClose(
-//                            client, snapshot, metadataChange).await();
-//
-//                    if (!commit.getStatus().isSuccess()) {
-//                        potentialError.message =  "Failed to commit Snapshot.";
-//                        return false;
-//                    }
-//
-//                    // No failures
-//                    return true;
-//                }
-//                catch (Exception ex) {
-//                    potentialError.message = ex.toString();
-//                    return false;
-//                }
+//            public void onFailure(@NonNull Exception e) {
+//                Log.d("df", "fuck write my snap ");
+//                potentialError.message = "Could not open Snapshot for update.";
+//                callback.onComplete(potentialError);
 //            }
-//
-//            @Override
-//            protected void onPostExecute(Boolean result) {
-//                if (result) {
-//                    callback.onComplete(null);
-//                } else {
-//                    callback.onComplete(potentialError);
-//                }
-//
-//            }
-//        };
-
-//        if (this.executor != null) {
-//            updateTask.executeOnExecutor(executor);
-//        }
-//        else  {
-//            updateTask.execute();
-//        }
+//        });
     }
 
 
@@ -1635,6 +1697,7 @@ public class GPGService  {
     }
 
     public void loadScore(final String leaderboardID, final LoadScoreCallback callback) {
+
         try {
             if (!isLoggedIn()) {
                 callback.onComplete(0, new Error("User is not logged into Google Play Game Services", 0));
@@ -1646,7 +1709,8 @@ public class GPGService  {
                         @Override
                         public void onSuccess(AnnotatedData<LeaderboardScore> leaderboardScoreAnnotatedData) {
                           long score = 0;
-                           score = leaderboardScoreAnnotatedData.get().getRawScore();
+                           Log.d("df", "LoadScore");
+                           score = Objects.requireNonNull(leaderboardScoreAnnotatedData.get()).getRawScore();
                             callback.onComplete(score, null);
                         }
                     }
@@ -1677,6 +1741,7 @@ public class GPGService  {
 
     public void addScore(final long scoreToAdd, final String leaderboardID, final CompletionCallback callback) {
 
+         Log.d("df"," addScore ! ll");
         loadScore(leaderboardID, new LoadScoreCallback() {
             @Override
             public void onComplete(long score, Error error) {
@@ -1695,31 +1760,12 @@ public class GPGService  {
     public void submitScore(final long score, final String leaderboardID, final CompletionCallback callback) {
         try {
             if (!isLoggedIn()) {
-
                 if (callback != null) {
                     callback.onComplete(new Error("User is not logged into Google Play Game Services", 0));
                 }
                 return;
             }
 
-
-//            Games.getLeaderboardsClient(this, GoogleSignIn.getLastSignedInAccount(this))
-//                    .getLeaderboardIntent(getString(R.string.leaderboard_id))
-//                    .addOnSuccessListener(new OnSuccessListener<Intent>() {
-//                        @Override
-//                        public void onSuccess(Intent intent) {
-//                            startActivityForResult(intent, RC_LEADERBOARD_UI);
-//                        }
-//                    });
-
-//            Games.getLeaderboardsClient(this.activity, signedInAccount).getLeaderboardIntent(leaderboardID).addOnSuccessListener(
-//                    new OnSuccessListener<Intent>() {
-//                        @Override
-//                        public void onSuccess(Intent intent) {
-//
-//                        }
-//                    }
-//            );
             Games.getLeaderboardsClient(this.activity, signedInAccount).submitScore(leaderboardID, score);
 
            // Games.Leaderboards.submitScore(client, leaderboardID, score);
@@ -1746,10 +1792,62 @@ public class GPGService  {
         mEventsClient.increment(eventId, increment);
     }
 
-    public void loadPlayerStats(final RequestCallback callback) {
-        Task<AnnotatedData<PlayerStats>> fe =  Games.getPlayerStatsClient(this.activity, signedInAccount).loadPlayerStats(false);
 
-         fe.addOnSuccessListener(new OnSuccessListener<AnnotatedData<PlayerStats>>() {
+    public void RequrstFriends(final RequestCallback callback){
+        // TODO: Player buffer call's
+
+//        Games.getPlayersClient(this.activity, signedInAccount)
+//                .loadFriends(PAGE_SIZE, /* forceReload= */ false)
+//                .addOnSuccessListener(new OnSuccessListener<AnnotatedData<PlayerBuffer>>() {
+//                            @Override
+//                            public void onSuccess(AnnotatedData<PlayerBuffer>  data) {
+//                                PlayerBuffer playerBuffer = data.get();
+//                                // ...
+//                                   Log.d("df", " PLAYER BUFFER ! \n");
+//                                assert playerBuffer != null;
+//                                Log.d("df", " real number to games friends == "+ playerBuffer.getCount());
+//                              }
+//                            }) // was ;
+//
+//                .addOnFailureListener(
+//                                    exception -> {
+//
+//                                if (exception instanceof FriendsResolutionRequiredException) {
+//
+//                                    PendingIntent pendingIntent =
+//                                            ((FriendsResolutionRequiredException) task.getException()).getResolution();
+//
+//                                      // was parentActivity
+//                                    this.activity.startIntentSenderForResult(
+//                                            pendingIntent.getIntentSender(),
+//                                            /* requestCode */ SHOW_SHARING_FRIENDS_CONSENT,
+//                                            /* fillInIntent */ null,
+//                                            /* flagsMask */ 0,
+//                                            /* flagsValues */ 0,
+//                                            /* extraFlags */ 0,
+//                                            /* options */ null);
+//                                }
+//                            });
+
+    }
+
+
+    public void recordVideoL(final RequestCallback callback){
+
+                    Games.getVideosClient(this.activity, signedInAccount)
+                    .getCaptureOverlayIntent()
+                    .addOnSuccessListener(new OnSuccessListener<Intent>() {
+                        @Override
+                        public void onSuccess(Intent intent) {
+                         //   startActivityForResult(intent, RC_VIDEO_OVERLAY);
+                            activity.startActivityForResult(intent, RC_VIDEO_OVERLAY);
+                        }
+                    });
+    }
+
+    public void loadPlayerStats(final RequestCallback callback) {
+
+        Task<AnnotatedData<PlayerStats>> fe =  Games.getPlayerStatsClient(this.activity, signedInAccount).loadPlayerStats(false).addOnSuccessListener(new OnSuccessListener<AnnotatedData<PlayerStats>>() {
              @Override
              public void onSuccess(AnnotatedData<PlayerStats> playerStatsAnnotatedData) {
 
@@ -1757,16 +1855,17 @@ public class GPGService  {
                  JSONObject data = new JSONObject();
                  if (stats != null) {
                      try {
+                          Log.d("df", " in loadPlayerStats ");
                          data.put("averageSessionLength", stats.getAverageSessionLength());
-                         data.put("churnProbability", stats.getChurnProbability());
+                        // data.put("churnProbability", stats.getChurnProbability());
                          data.put("daysSinceLastPlayed", stats.getDaysSinceLastPlayed());
-                         data.put("highSpenderProbability", stats.getHighSpenderProbability());
+                         //data.put("highSpenderProbability", stats.getHighSpenderProbability());
                          data.put("numberOfPurchases", stats.getNumberOfPurchases());
                          data.put("numberOfSessions", stats.getNumberOfSessions());
                          data.put("sessionPercentile", stats.getSessionPercentile());
                          data.put("spendPercentile", stats.getSpendPercentile());
-                         data.put("spendProbability", stats.getSpendProbability());
-                         data.put("totalSpendNext28Days", stats.getTotalSpendNext28Days());
+                         //data.put("spendProbability", stats.getSpendProbability());
+                         //data.put("totalSpendNext28Days", stats.getTotalSpendNext28Days());
                      }
                      catch (JSONException e) {
                          e.printStackTrace();
@@ -1780,40 +1879,42 @@ public class GPGService  {
          });
 
 
-//        PendingResult<Stats.LoadPlayerStatsResult> result =
-//                Games.Stats.loadPlayerStats(
-//                client, false /* forceReload */);
-//        result.setResultCallback(new ResultCallback<Stats.LoadPlayerStatsResult>() {
-//            public void onResult(Stats.LoadPlayerStatsResult result) {
-//                Status status = result.getStatus();
-//                if (status.isSuccess()) {
-//                    PlayerStats stats = result.getPlayerStats();
-//                    JSONObject data = new JSONObject();
-//                    if (stats != null) {
-//                        try {
-//                            data.put("averageSessionLength", stats.getAverageSessionLength());
-//                            data.put("churnProbability", stats.getChurnProbability());
-//                            data.put("daysSinceLastPlayed", stats.getDaysSinceLastPlayed());
-//                            data.put("highSpenderProbability", stats.getHighSpenderProbability());
-//                            data.put("numberOfPurchases", stats.getNumberOfPurchases());
-//                            data.put("numberOfSessions", stats.getNumberOfSessions());
-//                            data.put("sessionPercentile", stats.getSessionPercentile());
-//                            data.put("spendPercentile", stats.getSpendPercentile());
-//                            data.put("spendProbability", stats.getSpendProbability());
-//                            data.put("totalSpendNext28Days", stats.getTotalSpendNext28Days());
+
+        // load Events my
+
+//        Games.getEventsClient(this.activity, signedInAccount)
+//                .load(true)
+//                .addOnCompleteListener(new OnCompleteListener<AnnotatedData<EventBuffer>>() {
+//                    @Override
+//                    public void onComplete(@NonNull Task<AnnotatedData<EventBuffer>> task) {
+//                        if (task.isSuccessful()) {
+//                            // Process all the events.
+//                            for (Event event : task.getResult().get()) {
+//                                Log.d("df", "loaded event " + event.getName());
+//                                Log.d("dsf", " getEventID = " + event.getEventId());
+//                                Log.d("TAG", " getValue = " + event.getValue());
+//                                // event.getPlayer()
+//                                Log.d("TAG", "get formatted Value = " + event.getFormattedValue());
+//                                //event.getEventId()
+//                            }
+//                        } else {
+//                            // Handle Error
+//                            Exception exception = task.getException();
+//                            int statusCode = CommonStatusCodes.DEVELOPER_ERROR;
+//                            if (exception instanceof ApiException) {
+//                                ApiException apiException = (ApiException) exception;
+//                                statusCode = apiException.getStatusCode();
+//                            }
+//                            //  showError(statusCode);
+//                            Log.d("df", " status los code == " + statusCode);
 //                        }
-//                        catch (JSONException e) {
-//                            e.printStackTrace();
-//                        }
-//                        callback.onComplete(data, new Error("Player stats fetched successfully",  GamesStatusCodes.STATUS_OK));
-//                    } else {
-//                        callback.onComplete(null, new Error("getPlayerStats returned 'null'",  GamesStatusCodes.STATUS_INTERNAL_ERROR));
 //                    }
-//                } else {
-//                    callback.onComplete(null, new Error("status.isSuccess did not return 'true'",  GamesStatusCodes.STATUS_NETWORK_ERROR_NO_DATA));
-//                }
-//            }
-//        });
+//                });
+
+
+
+
+
     }
 
     private void notifyWillStart()
