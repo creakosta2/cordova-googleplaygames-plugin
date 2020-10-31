@@ -44,5 +44,5 @@
 
     </platform>
 
-    <dependency id="cocoon-plugin-social-common" />
+    <dependency id="cocoon-plugin-social-common" url="https://github.com/creakosta2/cordova-gpg-social"/>
 </plugin>
