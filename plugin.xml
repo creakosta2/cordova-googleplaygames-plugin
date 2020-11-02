@@ -43,4 +43,5 @@
         </js-module>
 
     </platform>
+    <dependency id="cordova-gpg-social" url="https://github.com/creakosta2/cordova-gpg-social"/>
 </plugin>
